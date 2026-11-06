@@ -17,7 +17,8 @@ partner brands so that each cent can be explained. Java 21, Spring Boot, plain S
 Needs Java 21. Without Docker, `make` uses a throwaway Postgres 16 on port 55433 (binaries from `/Library/PostgreSQL/16/bin`, data in `.local/pg`).
 
     make test      # starts the local database if Docker is missing, then ./mvnw verify
-    make run       # demo profile on http://localhost:8080 (seeds accounts for brands b1 and b2)
+    make run       # demo profile on http://localhost:8095 (PORT=... to change), seeds accounts for brands b1 and b2
+    make demo-data # posts 200 transfers with references, writes docs/demo/bank-statement.csv
     make chaos     # 100k transfers with duplicates and a kill -9, report in docs/chaos (N=... CONCURRENCY=...)
     make db-down   # stop the local database
 
@@ -60,3 +61,26 @@ commit sends a row again. The message key is the entry id and the payload carrie
 Default is `log`, which only logs the messages. The Kafka publisher uses topic `ledger.entries`, `acks=all`,
 an idempotent producer and waits for the broker acknowledgement before marking a row. The Kafka test uses
 Testcontainers and is skipped when Docker is missing.
+
+## Bank reconciliation
+
+Transfers and payouts accept an optional `reference` (order id, payout id), stored on the journal entry.
+`POST /v1/reconciliations` takes a bank statement as `text/csv` with the columns
+`booking_date,amount_cents,reference,counterparty` and matches it against the postings on `cash:bank` and
+`payouts:in-transit` by reference and amount. Money in is positive, money out is negative. The answer holds the
+matched count and three lists: `missingInLedger` (bank line without entry), `missingAtBank` (entry without bank line)
+and `amountMismatch` (same reference, different amount). Entries without a reference cannot be matched and are ignored.
+Every run is stored in `reconciliation_runs`.
+
+    make run         # terminal 1
+    make demo-data   # terminal 2, 200 transfers and a matching statement with 3 deliberate discrepancies
+    curl -X POST localhost:8095/v1/reconciliations -H 'Content-Type: text/csv' --data-binary @docs/demo/bank-statement.csv
+
+## Leitstand
+
+Open http://localhost:8095 for the control room: entries, money moved today, the sum of all postings with a
+balanced badge, outbox lag, the latest reconciliation, account balances, a live feed and an upload button for
+statements. It is one static page that polls `GET /v1/dashboard` every 2 seconds. The balance check is computed
+in SQL on every request (sum of postings, and each balance against its postings), nothing is cached.
+
+![Leitstand](docs/screenshots/leitstand.png)

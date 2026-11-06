@@ -47,6 +47,8 @@ normal balance.
 - `GET  /v1/accounts/{id}` balance and version
 - `GET  /v1/accounts/{id}/postings?cursor=` cursor-paginated history
 - `POST /v1/payouts` move a brand's payable balance to `payouts:in-transit`
+- `POST /v1/reconciliations` match a bank statement CSV against the ledger (transfers and payouts carry an optional `reference`)
+- `GET  /v1/dashboard` read model for the Leitstand (`/` serves the static page)
 
 Errors use RFC 9457 problem+json.
 
