@@ -31,7 +31,7 @@ import org.testcontainers.kafka.KafkaContainer;
 class KafkaOutboxTest extends PostgresTestBase {
 
     @Container
-    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0");
+    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.8.1");
 
     @DynamicPropertySource
     static void kafka(DynamicPropertyRegistry registry) {
