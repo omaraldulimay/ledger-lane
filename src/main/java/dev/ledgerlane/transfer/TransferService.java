@@ -1,7 +1,6 @@
 package dev.ledgerlane.transfer;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import dev.ledgerlane.account.Account;
 import dev.ledgerlane.account.AccountRepository;
 import dev.ledgerlane.api.LedgerException;
@@ -183,19 +182,11 @@ public class TransferService {
     }
 
     private String toJson(Object value) {
-        try {
-            return json.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return json.writeValueAsString(value);
     }
 
     private TransferResponse fromJson(String value) {
-        try {
-            return json.readValue(value, TransferResponse.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return json.readValue(value, TransferResponse.class);
     }
 
     private static String sha256(String text) {

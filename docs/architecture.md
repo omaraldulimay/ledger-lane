@@ -69,7 +69,7 @@ CI via Testcontainers; locally the relay logs instead (`ledger.outbox.publisher=
 
 ## Tech
 
-Java 21, Spring Boot 3, Spring JDBC (`JdbcClient`, plain SQL, no JPA), Flyway, PostgreSQL 16, Maven
+Java 21, Spring Boot 4 (Jackson 3), Spring JDBC (`JdbcClient`, plain SQL, no JPA), Flyway, PostgreSQL 16, Maven
 wrapper, JUnit 5, Testcontainers (CI), springdoc OpenAPI, Micrometer + Prometheus.
 
 Local run without Docker: a throwaway Postgres on port **55433** from `/Library/PostgreSQL/16/bin`

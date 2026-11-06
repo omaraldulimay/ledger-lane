@@ -17,7 +17,7 @@ Details in `docs/chaos/report.md`.
 ![Leitstand](docs/screenshots/leitstand.png)
 
 A double entry ledger service for a marketplace: it records every money movement between customer, platform and
-partner brands so that each cent can be explained. Java 21, Spring Boot, plain SQL on PostgreSQL. See `docs/architecture.md`.
+partner brands so that each cent can be explained. Java 21, Spring Boot 4, plain SQL on PostgreSQL. See `docs/architecture.md`.
 
 ## Decisions
 
@@ -26,6 +26,7 @@ partner brands so that each cent can be explained. Java 21, Spring Boot, plain S
 - [0003 Idempotency key inserted first](docs/adr/0003-idempotency-key-first.md)
 - [0004 Transactional outbox](docs/adr/0004-transactional-outbox.md)
 - [0005 Plain SQL with JdbcClient instead of JPA](docs/adr/0005-plain-sql-jdbcclient.md)
+- [0006 Upgrade to Spring Boot 4](docs/adr/0006-upgrade-to-spring-boot-4.md)
 
 ## Invariants
 

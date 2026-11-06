@@ -1,7 +1,6 @@
 package dev.ledgerlane.reconciliation;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -20,24 +19,14 @@ public class ReconciliationService {
 
     public ReconciliationResult reconcile(String csv) {
         ReconciliationResult result = Matcher.match(BankStatementParser.parse(csv), ledgerLines());
-        try {
-            jdbc.sql("INSERT INTO reconciliation_runs (result) VALUES (CAST(:r AS jsonb))")
-                    .param("r", json.writeValueAsString(result)).update();
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        jdbc.sql("INSERT INTO reconciliation_runs (result) VALUES (CAST(:r AS jsonb))")
+                .param("r", json.writeValueAsString(result)).update();
         return result;
     }
 
     public Optional<ReconciliationResult> latest() {
         return jdbc.sql("SELECT result::text FROM reconciliation_runs ORDER BY id DESC LIMIT 1")
-                .query(String.class).optional().map(s -> {
-                    try {
-                        return json.readValue(s, ReconciliationResult.class);
-                    } catch (JsonProcessingException e) {
-                        throw new IllegalStateException(e);
-                    }
-                });
+                .query(String.class).optional().map(s -> json.readValue(s, ReconciliationResult.class));
     }
 
     /** Entries with a reference, by their net posting on the bank accounts. Entries without a reference are not matchable. */
