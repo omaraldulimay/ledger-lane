@@ -5,5 +5,5 @@ import java.util.List;
 import java.util.UUID;
 
 public record TransferResponse(UUID id, String description, UUID reversesEntryId, Instant createdAt,
-                               List<PostingRequest> postings) {
+                               List<PostingRequest> postings, String reference) {
 }

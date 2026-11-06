@@ -46,7 +46,7 @@ public class TransferService {
     public Result transfer(String key, TransferRequest request) {
         Map<String, Long> deltas = TransferValidator.validate(request.postings());
         return idempotent(key, "POST /v1/transfers " + toJson(request),
-                entryId -> post(entryId, request.description(), null, request.postings(), deltas));
+                entryId -> post(entryId, request.description(), null, request.reference(), request.postings(), deltas));
     }
 
     @Transactional
@@ -65,7 +65,7 @@ public class TransferService {
                     .query((rs, i) -> new PostingRequest(rs.getString("account_id"), -rs.getLong("amount"),
                             rs.getString("currency")))
                     .list();
-            return post(reversalId, "Reversal of: " + description, entryId, inverse,
+            return post(reversalId, "Reversal of: " + description, entryId, null, inverse,
                     TransferValidator.validate(inverse));
         });
     }
@@ -98,7 +98,7 @@ public class TransferService {
             List<PostingRequest> postings = List.of(
                     new PostingRequest(payableId, amount, payable.currency()),
                     new PostingRequest("payouts:in-transit", -amount, payable.currency()));
-            return post(entryId, "Payout to brand " + request.brandId(), null, postings,
+            return post(entryId, "Payout to brand " + request.brandId(), null, request.reference(), postings,
                     TransferValidator.validate(postings));
         });
     }
@@ -133,7 +133,8 @@ public class TransferService {
         return new Result(response, false);
     }
 
-    private TransferResponse post(UUID entryId, String description, UUID reverses, List<PostingRequest> postings,
+    private TransferResponse post(UUID entryId, String description, UUID reverses, String reference,
+                                  List<PostingRequest> postings,
                                   Map<String, Long> deltas) {
         // deltas is sorted by account id, and lockAll orders by id as well.
         Map<String, Account> locked = accounts.lockAll(deltas.keySet()).stream()
@@ -156,10 +157,10 @@ public class TransferService {
 
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         try {
-            jdbc.sql("INSERT INTO journal_entries (id, description, reverses_entry_id, created_at) "
-                            + "VALUES (:id, :description, :reverses, :createdAt)")
+            jdbc.sql("INSERT INTO journal_entries (id, description, reverses_entry_id, reference, created_at) "
+                            + "VALUES (:id, :description, :reverses, :reference, :createdAt)")
                     .param("id", entryId).param("description", description)
-                    .param("reverses", reverses).param("createdAt", Timestamp.from(createdAt))
+                    .param("reverses", reverses).param("reference", reference).param("createdAt", Timestamp.from(createdAt))
                     .update();
         } catch (DuplicateKeyException e) {
             throw alreadyReversed(reverses);
@@ -170,7 +171,7 @@ public class TransferService {
                     .update();
         }
         deltas.forEach(accounts::applyDelta);
-        TransferResponse response = new TransferResponse(entryId, description, reverses, createdAt, postings);
+        TransferResponse response = new TransferResponse(entryId, description, reverses, createdAt, postings, reference);
         // Transactional outbox: same transaction as the entry, so an entry is published if and only if it exists.
         jdbc.sql("INSERT INTO outbox (entry_id, topic, payload) VALUES (:id, 'ledger.entries', CAST(:payload AS jsonb))")
                 .param("id", entryId).param("payload", toJson(response)).update();
