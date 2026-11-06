@@ -18,12 +18,12 @@ case "${1:-}" in
       "$PG_BIN/pg_ctl" -D "$DATA" -l "$ROOT/.local/pg.log" -w \
         -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp" start >/dev/null
     fi
-    for db in ledger ledger_test; do
+    for db in ledger ledger_demo ledger_test; do
       "$PG_BIN/psql" -h 127.0.0.1 -p $PORT -U ledger -d postgres -tAc \
         "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
         || "$PG_BIN/createdb" -h 127.0.0.1 -p $PORT -U ledger "$db"
     done
-    echo "postgres ready on 127.0.0.1:$PORT (dbs ledger and ledger_test, user ledger)"
+    echo "postgres ready on 127.0.0.1:$PORT (dbs ledger, ledger_demo and ledger_test, user ledger)"
     ;;
   stop)
     if [ -d "$DATA" ]; then "$PG_BIN/pg_ctl" -D "$DATA" -m fast stop >/dev/null 2>&1 || true; fi

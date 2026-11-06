@@ -1,7 +1,31 @@
 # Ledger Lane
 
+[![ci](https://github.com/omaraldulimay/ledger-lane/actions/workflows/ci.yml/badge.svg)](https://github.com/omaraldulimay/ledger-lane/actions/workflows/ci.yml)
+
+**A double entry ledger for a marketplace that survives retries and a kill -9 without losing or inventing a single cent.**
+
+| Chaos run | Result |
+|---|---|
+| Transfers sent | 100.000 |
+| Crashes (kill -9) | 1 |
+| Difference to the cent | 0 |
+| Throughput | 621 transfers/s |
+| Latency p95 | 74 ms |
+
+Details in `docs/chaos/report.md`.
+
+![Leitstand](docs/screenshots/leitstand.png)
+
 A double entry ledger service for a marketplace: it records every money movement between customer, platform and
 partner brands so that each cent can be explained. Java 21, Spring Boot, plain SQL on PostgreSQL. See `docs/architecture.md`.
+
+## Decisions
+
+- [0001 Double entry with integer cents](docs/adr/0001-double-entry-integer-cents.md)
+- [0002 Stored balance with row locks in id order](docs/adr/0002-stored-balance-with-row-locks.md)
+- [0003 Idempotency key inserted first](docs/adr/0003-idempotency-key-first.md)
+- [0004 Transactional outbox](docs/adr/0004-transactional-outbox.md)
+- [0005 Plain SQL with JdbcClient instead of JPA](docs/adr/0005-plain-sql-jdbcclient.md)
 
 ## Invariants
 
@@ -17,7 +41,8 @@ partner brands so that each cent can be explained. Java 21, Spring Boot, plain S
 Needs Java 21. Without Docker, `make` uses a throwaway Postgres 16 on port 55433 (binaries from `/Library/PostgreSQL/16/bin`, data in `.local/pg`).
 
     make test      # starts the local database if Docker is missing, then ./mvnw verify
-    make run       # demo profile on http://localhost:8095 (PORT=... to change), seeds accounts for brands b1 and b2
+    make run       # demo profile on http://localhost:8095 (PORT=... to change), database ledger_demo, seeds accounts for brands b1 and b2
+    make demo-reset # recreates only the throwaway database ledger_demo (stop the app first)
     make demo-data # posts 200 transfers with references, writes docs/demo/bank-statement.csv
     make chaos     # 100k transfers with duplicates and a kill -9, report in docs/chaos (N=... CONCURRENCY=...)
     make db-down   # stop the local database
@@ -83,4 +108,6 @@ balanced badge, outbox lag, the latest reconciliation, account balances, a live 
 statements. It is one static page that polls `GET /v1/dashboard` every 2 seconds. The balance check is computed
 in SQL on every request (sum of postings, and each balance against its postings), nothing is cached.
 
-![Leitstand](docs/screenshots/leitstand.png)
+On a phone the page stacks into one column:
+
+<img src="docs/screenshots/leitstand-mobile.png" alt="Leitstand on a phone" width="260">
