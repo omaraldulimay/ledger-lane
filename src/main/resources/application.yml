@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ledger-lane
+  datasource:
+    url: ${LEDGER_DB_URL:jdbc:postgresql://localhost:55433/ledger}
+    username: ${LEDGER_DB_USER:ledger}
+    password: ${LEDGER_DB_PASSWORD:ledger}
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
