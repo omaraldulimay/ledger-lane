@@ -10,8 +10,8 @@ db-down:
 	scripts/local-db.sh stop
 
 test:
-	@if command -v docker >/dev/null 2>&1; then ./mvnw verify; \
-	else scripts/local-db.sh start && $(DB_ENV) ./mvnw verify; fi
+	@if command -v docker >/dev/null 2>&1; then ./mvnw -B -ntp verify; \
+	else scripts/local-db.sh start && $(DB_ENV) ./mvnw -B -ntp verify; fi
 
 run: db-up
-	LEDGER_DB_URL=jdbc:postgresql://127.0.0.1:55433/ledger ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo
+	LEDGER_DB_URL=jdbc:postgresql://127.0.0.1:55433/ledger ./mvnw -B -ntp spring-boot:run -Dspring-boot.run.profiles=demo

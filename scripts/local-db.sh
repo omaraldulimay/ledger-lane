@@ -16,7 +16,7 @@ case "${1:-}" in
     fi
     if ! "$PG_BIN/pg_ctl" -D "$DATA" status >/dev/null 2>&1; then
       "$PG_BIN/pg_ctl" -D "$DATA" -l "$ROOT/.local/pg.log" -w \
-        -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=$ROOT/.local" start >/dev/null
+        -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp" start >/dev/null
     fi
     for db in ledger ledger_test; do
       "$PG_BIN/psql" -h 127.0.0.1 -p $PORT -U ledger -d postgres -tAc \
