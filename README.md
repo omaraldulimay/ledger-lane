@@ -18,6 +18,7 @@ Needs Java 21. Without Docker, `make` uses a throwaway Postgres 16 on port 55433
 
     make test      # starts the local database if Docker is missing, then ./mvnw verify
     make run       # demo profile on http://localhost:8080 (seeds accounts for brands b1 and b2)
+    make chaos     # 100k transfers with duplicates and a kill -9, report in docs/chaos (N=... CONCURRENCY=...)
     make db-down   # stop the local database
 
 With Docker, `./mvnw verify` starts Postgres through Testcontainers. Otherwise set `LEDGER_TEST_DB_URL`,

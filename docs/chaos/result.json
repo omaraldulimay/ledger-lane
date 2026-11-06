@@ -1,0 +1,23 @@
+{
+  "transfers": 100000,
+  "concurrency": 32,
+  "durationSeconds": 160.9,
+  "throughputPerSecond": 621,
+  "latencyMs": {"p50": 42.9, "p95": 74.4, "p99": 172.6},
+  "acceptedTransfers": 95081,
+  "duplicatesSent": 10054,
+  "replaysServed": 9602,
+  "rejected422": 4919,
+  "conflicts409": 0,
+  "crashes": 1,
+  "retriesAfterCrash": 594,
+  "invariants": {
+    "a_sum_of_postings_is_zero": "PASS",
+    "b_account_balance_equals_postings": "PASS",
+    "c_every_entry_balances": "PASS",
+    "d_idempotency_key_maps_to_exactly_one_entry": "PASS",
+    "e_model_equals_ledger_to_the_cent": "PASS",
+    "f_no_unexpected_errors": "PASS"
+  },
+  "result": "PASS"
+}
