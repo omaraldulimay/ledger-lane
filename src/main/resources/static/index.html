@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger Lane Leitstand</title>
+<style>
+:root {
+  --bg: #0c0e12; --panel: #14171d; --line: #232832; --text: #e9e6df; --muted: #8a909c;
+  --accent: #d9b36c; --ok: #4fbf8a; --warn: #e5a04a; --bad: #e0675d;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--sans); }
+main { max-width: 1320px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 24px; }
+.kicker { text-transform: uppercase; letter-spacing: .18em; font-size: 12px; color: var(--accent); }
+h1 { font: 400 clamp(36px, 6vw, 60px)/1.05 var(--serif); margin: 4px 0 0; letter-spacing: -.01em; }
+.live { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
+.dot.off { background: var(--bad); animation: none; }
+@keyframes pulse { 50% { opacity: .3; } }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.tile .label { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); }
+.tile .value { font: 400 clamp(26px, 2.2vw, 32px)/1.2 var(--serif); margin-top: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile .sub { margin-top: 6px; font-size: 13px; color: var(--muted); min-height: 20px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.badge.ok { background: rgba(79,191,138,.15); color: var(--ok); }
+.badge.bad { background: rgba(224,103,93,.15); color: var(--bad); }
+.badge.warn { background: rgba(229,160,74,.15); color: var(--warn); }
+.cols { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+h2 { font: 400 22px/1.2 var(--serif); margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; }
+td, th { padding: 7px 0; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 500; border-top: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 12px; }
+td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+.feed td.desc { word-break: break-word; }
+.feed tr.new td { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: rgba(217,179,108,.22); } to { background: transparent; } }
+td.mono:first-child { white-space: nowrap; padding-right: 12px; }
+@media (max-width: 600px) { .feed th:nth-child(3), .feed td:nth-child(3) { display: none; } }
+.recon { margin-top: 12px; }
+.types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 860px) { .types { grid-template-columns: 1fr; } }
+.type h3 { font: 600 13px var(--sans); margin: 0 0 4px; display: flex; justify-content: space-between; }
+.type p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+.type ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+.type li { padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; display: flex; justify-content: space-between; gap: 10px; }
+.type li span:first-child { min-width: 0; word-break: break-word; }
+.empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+button { font: 600 14px var(--sans); background: var(--accent); color: #1a1405; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+button:hover { filter: brightness(1.08); }
+input[type=file] { display: none; }
+#msg { font-size: 13px; color: var(--muted); }
+footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="kicker">Nordkai Marketplace</div>
+      <h1>Leitstand</h1>
+    </div>
+    <div class="live"><span class="dot" id="dot"></span><span id="updated">verbinde ...</span></div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Buchungen gesamt</div><div class="value" id="entries">0</div><div class="sub">Journal Einträge, unveränderlich</div></div>
+    <div class="tile"><div class="label">Bewegtes Geld heute</div><div class="value" id="moved">0,00 €</div><div class="sub">Summe aller Soll Buchungen (UTC Tag)</div></div>
+    <div class="tile"><div class="label">Summe aller Postings</div><div class="value" id="sum">0,00 €</div><div class="sub" id="balanced"></div></div>
+    <div class="tile"><div class="label">Outbox Rückstand</div><div class="value" id="lag">0</div><div class="sub" id="lagsub">noch nicht veröffentlicht</div></div>
+    <div class="tile"><div class="label">Letzter Bankabgleich</div><div class="value" id="rec">keiner</div><div class="sub" id="recsub"></div></div>
+  </div>
+
+  <div class="cols">
+    <section>
+      <h2>Konten</h2>
+      <table><thead><tr><th>Konto</th><th class="num">Saldo</th></tr></thead><tbody id="accounts"></tbody></table>
+    </section>
+    <section class="feed">
+      <h2>Live Buchungen</h2>
+      <table><thead><tr><th>Zeit</th><th>Beschreibung</th><th>Referenz</th><th class="num">Betrag</th></tr></thead><tbody id="feed"></tbody></table>
+    </section>
+  </div>
+
+  <section class="recon">
+    <h2>Bankabgleich
+      <span>
+        <span id="msg"></span>
+        <button id="upload">Kontoauszug hochladen</button>
+        <input type="file" id="file" accept=".csv,text/csv">
+      </span>
+    </h2>
+    <div class="types">
+      <div class="type"><h3>Fehlt im Ledger <span class="badge" id="c1">0</span></h3><p>Bankzeile ohne Buchung</p><ul id="l1"></ul></div>
+      <div class="type"><h3>Fehlt bei der Bank <span class="badge" id="c2">0</span></h3><p>Buchung ohne Bankzeile</p><ul id="l2"></ul></div>
+      <div class="type"><h3>Betrag weicht ab <span class="badge" id="c3">0</span></h3><p>Gleiche Referenz, anderer Betrag</p><ul id="l3"></ul></div>
+    </div>
+  </section>
+  <footer>Alle Zahlen werden per SQL berechnet, Aktualisierung alle 2 Sekunden.</footer>
+</main>
+<script>
+const eur = c => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(c / 100);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const time = iso => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+let seen = new Set(), first = true;
+
+function list(id, countId, items, render) {
+  $(countId).textContent = items.length;
+  $(countId).className = 'badge ' + (items.length ? 'warn' : 'ok');
+  $(id).innerHTML = items.length ? items.map(i => '<li>' + render(i) + '</li>').join('') : '<li class="empty">keine</li>';
+}
+
+function render(d) {
+  $('entries').textContent = d.entries.toLocaleString('de-DE');
+  $('moved').textContent = eur(d.movedTodayCents);
+  $('sum').textContent = eur(d.postingsSumCents);
+  $('balanced').innerHTML = d.balanced
+    ? '<span class="badge ok">ausgeglichen</span> Salden entsprechen den Postings'
+    : '<span class="badge bad">Abweichung</span> ' + d.driftedAccounts + ' Konten driften';
+  $('lag').textContent = d.outboxLag.toLocaleString('de-DE');
+  $('lagsub').innerHTML = d.outboxLag === 0 ? '<span class="badge ok">alles veröffentlicht</span>' : 'noch nicht veröffentlicht';
+
+  const r = d.lastReconciliation;
+  if (r) {
+    const issues = r.missingInLedger.length + r.missingAtBank.length + r.amountMismatch.length;
+    $('rec').textContent = r.matched.toLocaleString('de-DE');
+    $('recsub').innerHTML = 'gematcht ' + (issues ? '<span class="badge warn">' + issues + ' Auffälligkeiten</span>' : '<span class="badge ok">keine Auffälligkeiten</span>');
+    list('l1', 'c1', r.missingInLedger, b => '<span>' + esc(b.counterparty) + '<br><span class="mono">' + esc(b.bookingDate) + ' ' + esc(b.reference) + '</span></span><span class="mono">' + eur(b.amountCents) + '</span>');
+    list('l2', 'c2', r.missingAtBank, l => '<span>' + esc(l.description) + '<br><span class="mono">' + esc(l.reference) + '</span></span><span class="mono">' + eur(l.amountCents) + '</span>');
+    list('l3', 'c3', r.amountMismatch, m => '<span>' + esc(m.reference) + '<br><span class="mono">Bank ' + eur(m.bankAmountCents) + '</span></span><span class="mono">Ledger ' + eur(m.ledgerAmountCents) + '</span>');
+  }
+
+  $('accounts').innerHTML = d.accounts.map(a =>
+    '<tr><td>' + esc(a.id) + '<br><span class="mono">' + esc(a.type) + '</span></td><td class="num">' + eur(a.normalBalance) + '</td></tr>').join('');
+
+  $('feed').innerHTML = d.latestEntries.map(e =>
+    '<tr class="' + (!first && !seen.has(e.id) ? 'new' : '') + '"><td class="mono">' + time(e.createdAt) + '</td><td class="desc">' + esc(e.description) +
+    '</td><td class="mono">' + esc(e.reference) + '</td><td class="num">' + eur(e.amount) + '</td></tr>').join('');
+  seen = new Set(d.latestEntries.map(e => e.id));
+  first = false;
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/v1/dashboard', { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+    $('dot').className = 'dot';
+    $('updated').textContent = 'live, ' + new Date().toLocaleTimeString('de-DE');
+  } catch (e) {
+    $('dot').className = 'dot off';
+    $('updated').textContent = 'keine Verbindung';
+  }
+}
+poll();
+setInterval(poll, 2000);
+
+$('upload').onclick = () => $('file').click();
+$('file').onchange = async () => {
+  const f = $('file').files[0];
+  if (!f) return;
+  $('msg').textContent = 'gleiche ab ...';
+  try {
+    const res = await fetch('/v1/reconciliations', { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: await f.text() });
+    const body = await res.json();
+    $('msg').textContent = res.ok ? f.name + ': ' + body.matched + ' gematcht' : (body.detail || 'Fehler ' + res.status);
+    poll();
+  } catch (e) {
+    $('msg').textContent = 'Upload fehlgeschlagen';
+  }
+  $('file').value = '';
+};
+</script>
+</body>
+</html>
