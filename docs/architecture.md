@@ -26,10 +26,13 @@ every cent can be explained and the books balance.
 | `customer:clearing` | liability | yes |
 | `brand:{id}:payable` | liability | no |
 | `platform:revenue` | revenue | no |
-| `payouts:in-transit` | asset | no |
+| `payouts:in-transit` | liability | no |
 
 Example: a customer pays 100,00 EUR for a brand product with 15 % commission:
 `cash:bank +10000`, `brand:b1:payable -8500`, `platform:revenue -1500` (credit-normal accounts use negative signs; postings sum to 0).
+
+`payouts:in-transit` is a liability: it holds money we released to the bank but that has not settled yet.
+A payout debits `brand:{id}:payable` (we owe the brand less) and credits `payouts:in-transit` (we now owe the bank run).
 
 Sign convention: a posting amount is positive for a debit and negative for a credit. Assets are
 debit-normal, liabilities and revenue are credit-normal. The API shows a **normal balance**
@@ -58,8 +61,9 @@ Errors use RFC 9457 problem+json.
 ## Events (step 3)
 
 Transactional outbox: the entry and an `outbox` row are written in one transaction; a relay publishes
-outbox rows to Kafka (`ledger.entries`) at least once, consumers dedupe by entry id. Kafka runs in CI
-via Testcontainers; locally the relay can log instead.
+outbox rows to Kafka (`ledger.entries`, key = entry id) at least once, consumers dedupe by entry id. The relay
+claims rows with `FOR UPDATE SKIP LOCKED`, so several relays never publish the same row concurrently. Kafka runs in
+CI via Testcontainers; locally the relay logs instead (`ledger.outbox.publisher=log`, the default).
 
 ## Tech
 
@@ -76,6 +80,6 @@ Local run without Docker: a throwaway Postgres on port **55433** from `/Library/
 |---|---|---|
 | 1 | Skeleton, schema, accounts, transfers, idempotency, reversal, balances, tests | Unit + integration tests green |
 | 2 | Concurrency and chaos proof: 100k transfers in parallel, duplicates, killed process | Invariants hold, sum = 0 to the cent |
-| 3 | Outbox + Kafka events, payouts | Every entry published exactly once (after dedupe) |
+| 3 | Outbox + Kafka events, payouts | Every entry published at least once, exactly once after dedupe by entry id |
 | 4 | Reconciliation against a bank statement CSV, small web Leitstand | Mismatches found and explained |
 | 5 | CI (build, tests, Trivy, SBOM), ADRs, README, teaser video, portfolio page | CI green, page live |

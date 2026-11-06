@@ -37,3 +37,26 @@ A customer pays 100,00 EUR for a product of brand b1, with 15 % commission:
 
 Sending the same request again returns `200` with the same body and `Idempotent-Replayed: true`.
 Positive amounts are debits, negative amounts are credits.
+
+## Payouts
+
+Pay a brand its payable balance (or part of it) into `payouts:in-transit`. `amount` is optional, in cents.
+Over the balance or zero is a `422`.
+
+    curl -i -X POST localhost:8080/v1/payouts \
+      -H 'Content-Type: application/json' -H 'Idempotency-Key: payout-2026-w45-b1' \
+      -d '{"brandId":"b1","amount":8500}'
+
+## Events: outbox and Kafka
+
+Every journal entry (transfer, reversal, payout) writes an `outbox` row in the same transaction, so an entry is
+published if and only if it exists. A relay claims unpublished rows with `SELECT ... FOR UPDATE SKIP LOCKED`
+in id order, publishes them and sets `published_at`. Publishing is **at least once**: a crash between publish and
+commit sends a row again. The message key is the entry id and the payload carries `id`, `description`,
+`reversesEntryId`, `createdAt` and `postings`, so **consumers dedupe by entry id**.
+
+    LEDGER_OUTBOX_PUBLISHER=kafka LEDGER_KAFKA_BOOTSTRAP=localhost:9092 make run
+
+Default is `log`, which only logs the messages. The Kafka publisher uses topic `ledger.entries`, `acks=all`,
+an idempotent producer and waits for the broker acknowledgement before marking a row. The Kafka test uses
+Testcontainers and is skipped when Docker is missing.

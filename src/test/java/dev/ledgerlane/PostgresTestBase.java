@@ -24,6 +24,8 @@ public abstract class PostgresTestBase {
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
+        // tests drive the relay by hand
+        registry.add("ledger.outbox.relay.enabled", () -> "false");
         if (CONTAINER != null) {
             registry.add("spring.datasource.url", CONTAINER::getJdbcUrl);
             registry.add("spring.datasource.username", CONTAINER::getUsername);

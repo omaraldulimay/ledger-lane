@@ -23,7 +23,7 @@ class DemoSeed implements ApplicationRunner {
         accounts.insert("cash:bank", AccountType.ASSET, "EUR", false);
         accounts.insert("customer:clearing", AccountType.LIABILITY, "EUR", true);
         accounts.insert("platform:revenue", AccountType.REVENUE, "EUR", false);
-        accounts.insert("payouts:in-transit", AccountType.ASSET, "EUR", false);
+        accounts.insert("payouts:in-transit", AccountType.LIABILITY, "EUR", false);
         for (String brand : new String[] {"b1", "b2"}) {
             accounts.insert("brand:" + brand + ":payable", AccountType.LIABILITY, "EUR", false);
         }

@@ -71,6 +71,39 @@ public class TransferService {
     }
 
     /**
+     * Pays out a brand's payable balance (or part of it) to payouts:in-transit.
+     * Signs: the payable account is a liability (credit normal). Paying the brand reduces what we owe, which
+     * is a debit, so payable gets +amount. payouts:in-transit is also a liability here (money we have released
+     * to the bank but that has not settled yet), so it gets the credit, -amount, and its normal balance grows.
+     * The postings sum to 0 and the no-overdraft rule on payable rejects anything above the balance.
+     */
+    @Transactional
+    public Result payout(String key, PayoutRequest request) {
+        if (request.amount() != null && request.amount() <= 0) {
+            throw LedgerException.invalid("Payout amount must be positive");
+        }
+        return idempotent(key, "POST /v1/payouts " + toJson(request), entryId -> {
+            String payableId = "brand:" + request.brandId() + ":payable";
+            Account payable = accounts.lockAll(List.of(payableId)).stream().findFirst()
+                    .orElseThrow(() -> LedgerException.notFound("Brand " + request.brandId() + " has no payable account"));
+            long available = payable.normalBalance();
+            long amount = request.amount() != null ? request.amount() : available;
+            if (amount <= 0) {
+                throw LedgerException.invalid("Brand " + request.brandId() + " has nothing to pay out");
+            }
+            if (amount > available) {
+                throw new LedgerException(HttpStatus.UNPROCESSABLE_ENTITY, "Insufficient funds",
+                        "Payout " + amount + " exceeds payable balance " + available);
+            }
+            List<PostingRequest> postings = List.of(
+                    new PostingRequest(payableId, amount, payable.currency()),
+                    new PostingRequest("payouts:in-transit", -amount, payable.currency()));
+            return post(entryId, "Payout to brand " + request.brandId(), null, postings,
+                    TransferValidator.validate(postings));
+        });
+    }
+
+    /**
      * The key row is inserted first. A concurrent request with the same key waits on the unique index until
      * we commit, then sees the stored response. A failed request rolls the key back, so a retry runs again.
      */
@@ -137,7 +170,11 @@ public class TransferService {
                     .update();
         }
         deltas.forEach(accounts::applyDelta);
-        return new TransferResponse(entryId, description, reverses, createdAt, postings);
+        TransferResponse response = new TransferResponse(entryId, description, reverses, createdAt, postings);
+        // Transactional outbox: same transaction as the entry, so an entry is published if and only if it exists.
+        jdbc.sql("INSERT INTO outbox (entry_id, topic, payload) VALUES (:id, 'ledger.entries', CAST(:payload AS jsonb))")
+                .param("id", entryId).param("payload", toJson(response)).update();
+        return response;
     }
 
     private static LedgerException alreadyReversed(UUID entryId) {

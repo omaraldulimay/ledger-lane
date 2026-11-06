@@ -33,7 +33,7 @@ class TransferController {
     }
 
     /** 201 for a new entry, 200 with the original body when the key was seen before. */
-    private static ResponseEntity<TransferResponse> respond(TransferService.Result result) {
+    static ResponseEntity<TransferResponse> respond(TransferService.Result result) {
         return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .header("Idempotent-Replayed", String.valueOf(result.replayed()))
                 .body(result.transfer());

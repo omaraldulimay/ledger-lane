@@ -8,6 +8,12 @@ spring:
   jackson:
     deserialization:
       accept-float-as-int: false
+  kafka:
+    bootstrap-servers: ${LEDGER_KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
   mvc:
     problemdetails:
       enabled: true
@@ -17,3 +23,7 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+
+ledger:
+  outbox:
+    publisher: ${LEDGER_OUTBOX_PUBLISHER:log}   # log or kafka
