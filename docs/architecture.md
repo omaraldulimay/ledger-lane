@@ -9,13 +9,13 @@ every cent can be explained and the books balance.
 
 ## Core rules (the invariants)
 
-1. **Double entry.** Every journal entry has at least two postings, and the postings sum to exactly 0.
-2. **Integer cents.** Amounts are `long` minor units with a currency (EUR only for now). No floating point anywhere.
+1. **Double entry.** Every journal entry has at least two postings, and the postings of each currency sum to exactly 0.
+2. **Integer cents.** Amounts are `long` minor units with a currency. No floating point anywhere. Cents of different currencies are never added; an exchange goes through `fx:{currency}` accounts.
 3. **Immutable.** Entries are never updated or deleted. A mistake is corrected with a reversal entry.
 4. **Idempotent writes.** Every write takes an `Idempotency-Key`. Same key + same body returns the original
    result; same key + different body returns `409 Conflict`.
 5. **No overdraft** on accounts that must not go negative (brand payable accounts, payouts).
-6. **Global check.** The sum of all postings in the system is always 0, and each account balance equals
+6. **Global check.** Per currency, the sum of all postings in the system is always 0, and each account balance equals
    the sum of its postings.
 
 ## Accounts
@@ -23,6 +23,8 @@ every cent can be explained and the books balance.
 | Account | Type | May go negative |
 |---|---|---|
 | `cash:bank` | asset | no |
+| `cash:bank-usd` | asset | no |
+| `fx:{currency}` | equity | yes |
 | `customer:clearing` | liability | yes |
 | `brand:{id}:payable` | liability | no |
 | `platform:revenue` | revenue | no |
@@ -33,6 +35,8 @@ Example: a customer pays 100,00 EUR for a brand product with 15 % commission:
 
 `payouts:in-transit` is a liability: it holds money we released to the bank but that has not settled yet.
 A payout debits `brand:{id}:payable` (we owe the brand less) and credits `payouts:in-transit` (we now owe the bank run).
+When the bank statement shows the payout, the reconciliation settles it: `payouts:in-transit` is debited and
+`cash:bank` credited, once per payout (`settles_entry_id` is unique, the payout row is locked first).
 
 Sign convention: a posting amount is positive for a debit and negative for a credit. Assets are
 debit-normal, liabilities and revenue are credit-normal. The API shows a **normal balance**
@@ -50,7 +54,8 @@ normal balance.
 - `POST /v1/reconciliations` match a bank statement CSV against the ledger (transfers and payouts carry an optional `reference`)
 - `GET  /v1/dashboard` read model for the Leitstand (`/` serves the static page)
 
-Errors use RFC 9457 problem+json.
+Errors use RFC 9457 problem+json. Every `/v1` call needs an `X-Api-Key` with a role: SHOP (transfers, reversals),
+FINANCE (reversals, payouts, reconciliations, accounts, reads), AUDITOR (reads).
 
 ## Consistency
 

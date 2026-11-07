@@ -19,7 +19,7 @@ class DashboardTest extends PostgresTestBase {
     void reportsBalancedLedger() throws Exception {
         mvc.perform(get("/v1/dashboard"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.postingsSumCents").value(0))
+                .andExpect(jsonPath("$.postingsSumByCurrency.EUR").value(0))
                 .andExpect(jsonPath("$.driftedAccounts").value(0))
                 .andExpect(jsonPath("$.balanced").value(true))
                 .andExpect(jsonPath("$.outboxLag").isNumber())

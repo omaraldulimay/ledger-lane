@@ -1,24 +1,42 @@
 package dev.ledgerlane.reconciliation;
 
 import tools.jackson.databind.ObjectMapper;
+import dev.ledgerlane.transfer.TransferService;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ReconciliationService {
 
     private final JdbcClient jdbc;
     private final ObjectMapper json;
+    private final TransferService transfers;
 
-    ReconciliationService(JdbcClient jdbc, ObjectMapper json) {
+    ReconciliationService(JdbcClient jdbc, ObjectMapper json, TransferService transfers) {
         this.jdbc = jdbc;
         this.json = json;
+        this.transfers = transfers;
     }
 
+    /**
+     * Matches the statement and, in the same transaction, settles every matched payout that is still in transit.
+     * Payouts are settled in ascending entry id order, so concurrent runs lock them in the same order.
+     */
+    @Transactional
     public ReconciliationResult reconcile(String csv) {
-        ReconciliationResult result = Matcher.match(BankStatementParser.parse(csv), ledgerLines());
+        Matcher.Outcome outcome = Matcher.matchWithIds(BankStatementParser.parse(csv), ledgerLines());
+        List<String> settled = new ArrayList<>();
+        for (UUID id : outcome.matchedEntryIds().stream().sorted().toList()) {
+            transfers.settlePayout(id).ifPresent(r -> settled.add(r.reference()));
+        }
+        ReconciliationResult r = outcome.result();
+        ReconciliationResult result = new ReconciliationResult(r.matched(), r.missingInLedger(), r.missingAtBank(),
+                r.amountMismatch(), settled);
         jdbc.sql("INSERT INTO reconciliation_runs (result) VALUES (CAST(:r AS jsonb))")
                 .param("r", json.writeValueAsString(result)).update();
         return result;

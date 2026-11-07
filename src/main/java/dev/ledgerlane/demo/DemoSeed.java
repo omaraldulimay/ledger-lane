@@ -24,6 +24,10 @@ class DemoSeed implements ApplicationRunner {
         accounts.insert("customer:clearing", AccountType.LIABILITY, "EUR", true);
         accounts.insert("platform:revenue", AccountType.REVENUE, "EUR", false);
         accounts.insert("payouts:in-transit", AccountType.LIABILITY, "EUR", false);
+        // US customers pay into a USD account; fx:usd and fx:eur carry the exchange between the two currencies
+        accounts.insert("cash:bank-usd", AccountType.ASSET, "USD", false);
+        accounts.insert("fx:usd", AccountType.EQUITY, "USD", true);
+        accounts.insert("fx:eur", AccountType.EQUITY, "EUR", true);
         for (String brand : new String[] {"b1", "b2"}) {
             accounts.insert("brand:" + brand + ":payable", AccountType.LIABILITY, "EUR", false);
         }

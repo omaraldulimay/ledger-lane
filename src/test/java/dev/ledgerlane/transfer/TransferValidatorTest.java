@@ -38,10 +38,32 @@ class TransferValidatorTest {
     }
 
     @Test
-    void rejectsMixedCurrencies() {
+    void rejectsCurrencyThatOnlyBalancesWithAnotherCurrency() {
+        // 100 EUR against 100 USD is not balanced: cents of different currencies are never added
         var postings = List.of(p("a", 100), new PostingRequest("b", -100L, "USD"));
         assertThatThrownBy(() -> TransferValidator.validate(postings))
-                .isInstanceOf(LedgerException.class).hasMessageContaining("currency");
+                .isInstanceOf(LedgerException.class).hasMessageContaining("in EUR must sum to zero");
+    }
+
+    @Test
+    void acceptsExchangeThatBalancesPerCurrency() {
+        var postings = List.of(new PostingRequest("cash:usd", 11000L, "USD"), new PostingRequest("fx:usd", -11000L, "USD"),
+                p("fx:eur", 10000), p("payable", -10000));
+        assertThat(TransferValidator.validate(postings)).hasSize(4);
+    }
+
+    @Test
+    void rejectsAccountPostedInTwoCurrencies() {
+        var postings = List.of(p("a", 100), p("b", -100), new PostingRequest("a", 50L, "USD"), new PostingRequest("c", -50L, "USD"));
+        assertThatThrownBy(() -> TransferValidator.validate(postings))
+                .isInstanceOf(LedgerException.class).hasMessageContaining("two currencies");
+    }
+
+    @Test
+    void rejectsInvalidCurrencyCode() {
+        var postings = List.of(new PostingRequest("a", 100L, "euro"), new PostingRequest("b", -100L, "euro"));
+        assertThatThrownBy(() -> TransferValidator.validate(postings))
+                .isInstanceOf(LedgerException.class).hasMessageContaining("ISO 4217");
     }
 
     @Test

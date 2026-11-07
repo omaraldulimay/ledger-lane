@@ -1,0 +1,14 @@
+# Demo profile only: well known keys for trying the API locally. Never use these anywhere else.
+# Keys: demo-shop, demo-finance, demo-auditor. Only their SHA-256 hashes are stored.
+ledger:
+  security:
+    api-keys:
+      - name: demo-shop
+        sha256: f74911f81e738c680e26d81dc10e786a13dd0058581aca1bdc031ea81a75b052
+        roles: [SHOP]
+      - name: demo-finance
+        sha256: f44ad00f9f1c20afbebb9bbe0a81b5f7fa403adea894b62be02977f8febbb2d9
+        roles: [FINANCE]
+      - name: demo-auditor
+        sha256: 0515e564e3cdc6608115c45f19c07d2d8cc85a6dd5c99d900626720ae1e7f875
+        roles: [AUDITOR]

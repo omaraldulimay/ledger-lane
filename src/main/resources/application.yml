@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: ledger-lane
+  autoconfigure:
+    # API keys only: no user store, so no generated default password
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${LEDGER_DB_URL:jdbc:postgresql://localhost:55433/ledger}
     username: ${LEDGER_DB_USER:ledger}
@@ -30,3 +33,7 @@ management:
 ledger:
   outbox:
     publisher: ${LEDGER_OUTBOX_PUBLISHER:log}   # log or kafka
+  # API keys (name, sha256 of the key, roles SHOP / FINANCE / AUDITOR). Empty means every /v1 request is rejected.
+  # Production sets them through the environment, e.g. LEDGER_SECURITY_API_KEYS_0_SHA256.
+  security:
+    api-keys: []

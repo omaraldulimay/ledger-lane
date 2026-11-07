@@ -12,6 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -19,6 +20,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -30,6 +32,9 @@ public class TransferService {
 
     private record Stored(String hash, String response) {
     }
+
+    static final String BANK = "cash:bank";
+    static final String IN_TRANSIT = "payouts:in-transit";
 
     private final JdbcClient jdbc;
     private final AccountRepository accounts;
@@ -45,7 +50,7 @@ public class TransferService {
     public Result transfer(String key, TransferRequest request) {
         Map<String, Long> deltas = TransferValidator.validate(request.postings());
         return idempotent(key, "POST /v1/transfers " + toJson(request),
-                entryId -> post(entryId, request.description(), null, request.reference(), request.postings(), deltas));
+                entryId -> post(entryId, request.description(), null, null, request.reference(), request.postings(), deltas));
     }
 
     @Transactional
@@ -64,7 +69,7 @@ public class TransferService {
                     .query((rs, i) -> new PostingRequest(rs.getString("account_id"), -rs.getLong("amount"),
                             rs.getString("currency")))
                     .list();
-            return post(reversalId, "Reversal of: " + description, entryId, null, inverse,
+            return post(reversalId, "Reversal of: " + description, entryId, null, null, inverse,
                     TransferValidator.validate(inverse));
         });
     }
@@ -96,8 +101,8 @@ public class TransferService {
             }
             List<PostingRequest> postings = List.of(
                     new PostingRequest(payableId, amount, payable.currency()),
-                    new PostingRequest("payouts:in-transit", -amount, payable.currency()));
-            return post(entryId, "Payout to brand " + request.brandId(), null, request.reference(), postings,
+                    new PostingRequest(IN_TRANSIT, -amount, payable.currency()));
+            return post(entryId, "Payout to brand " + request.brandId(), null, null, request.reference(), postings,
                     TransferValidator.validate(postings));
         });
     }
@@ -132,18 +137,55 @@ public class TransferService {
         return new Result(response, false);
     }
 
-    private TransferResponse post(UUID entryId, String description, UUID reverses, String reference,
+    /**
+     * Closes a payout once the bank statement shows the money left the bank: payouts:in-transit is debited (we no
+     * longer owe the bank run) and cash:bank is credited (the money is gone). Returns empty if the entry is not a
+     * payout, was reversed, or is already settled. The payout row is locked first, so two reconciliations running
+     * at the same time settle it once; the unique settles_entry_id column is the second line of defence.
+     * Runs inside the caller's transaction, which must lock payouts in ascending id order.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<TransferResponse> settlePayout(UUID payoutId) {
+        // NO KEY UPDATE, not UPDATE: it does not block reversals, whose foreign key only takes KEY SHARE.
+        Optional<String> reference = jdbc.sql("SELECT reference FROM journal_entries WHERE id = :id FOR NO KEY UPDATE")
+                .param("id", payoutId).query((rs, i) -> Optional.ofNullable(rs.getString(1))).optional()
+                .orElse(Optional.empty());
+        boolean done = jdbc.sql("""
+                SELECT EXISTS (SELECT 1 FROM journal_entries WHERE settles_entry_id = :id OR reverses_entry_id = :id)
+                """).param("id", payoutId).query(Boolean.class).single();
+        if (done) {
+            return Optional.empty();
+        }
+        Optional<PostingRequest> inTransit = jdbc.sql("""
+                SELECT amount, currency FROM postings
+                WHERE entry_id = :id AND account_id = 'payouts:in-transit' AND amount < 0
+                """)
+                .param("id", payoutId)
+                .query((rs, i) -> new PostingRequest(IN_TRANSIT, -rs.getLong("amount"), rs.getString("currency")))
+                .optional();
+        if (inTransit.isEmpty()) {
+            return Optional.empty();
+        }
+        PostingRequest debit = inTransit.get();
+        List<PostingRequest> postings = List.of(debit, new PostingRequest(BANK, -debit.amount(), debit.currency()));
+        return Optional.of(post(UUID.randomUUID(), "Payout settled at the bank", null, payoutId, reference.orElse(null),
+                postings, TransferValidator.validate(postings)));
+    }
+
+    private TransferResponse post(UUID entryId, String description, UUID reverses, UUID settles, String reference,
                                   List<PostingRequest> postings,
                                   Map<String, Long> deltas) {
         // deltas is sorted by account id, and lockAll orders by id as well.
         Map<String, Account> locked = accounts.lockAll(deltas.keySet()).stream()
                 .collect(Collectors.toMap(Account::id, a -> a));
+        Map<String, String> currencyByAccount = postings.stream()
+                .collect(Collectors.toMap(PostingRequest::accountId, PostingRequest::currency, (a, b) -> a));
         for (var e : deltas.entrySet()) {
             Account account = locked.get(e.getKey());
             if (account == null) {
                 throw LedgerException.invalid("Account " + e.getKey() + " does not exist");
             }
-            String currency = postings.get(0).currency();
+            String currency = currencyByAccount.get(e.getKey());
             if (!account.currency().equals(currency)) {
                 throw LedgerException.invalid("Account " + account.id() + " holds " + account.currency()
                         + ", not " + currency);
@@ -156,12 +198,15 @@ public class TransferService {
 
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         try {
-            jdbc.sql("INSERT INTO journal_entries (id, description, reverses_entry_id, reference, created_at) "
-                            + "VALUES (:id, :description, :reverses, :reference, :createdAt)")
-                    .param("id", entryId).param("description", description)
-                    .param("reverses", reverses).param("reference", reference).param("createdAt", Timestamp.from(createdAt))
+            jdbc.sql("INSERT INTO journal_entries (id, description, reverses_entry_id, settles_entry_id, reference, created_at) "
+                            + "VALUES (:id, :description, :reverses, :settles, :reference, :createdAt)")
+                    .param("id", entryId).param("description", description).param("reverses", reverses)
+                    .param("settles", settles).param("reference", reference).param("createdAt", Timestamp.from(createdAt))
                     .update();
         } catch (DuplicateKeyException e) {
+            if (settles != null) {
+                throw LedgerException.conflict("Already settled", "Payout " + settles + " was already settled");
+            }
             throw alreadyReversed(reverses);
         }
         for (PostingRequest p : postings) {

@@ -289,7 +289,9 @@ public class Chaos {
 
     static Reply call(String method, String path, String key, String body) throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE + path)).timeout(Duration.ofSeconds(20))
-                .header("Content-Type", "application/json");
+                .header("Content-Type", "application/json")
+                // demo profile keys: reads need AUDITOR, transfers and reversals SHOP
+                .header("X-Api-Key", method.equals("GET") ? "demo-auditor" : "demo-shop");
         if (key != null) b.header("Idempotency-Key", key);
         b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());

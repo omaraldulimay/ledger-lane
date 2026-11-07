@@ -46,8 +46,9 @@ td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px;
 td.mono:first-child { white-space: nowrap; padding-right: 12px; }
 @media (max-width: 600px) { .feed th:nth-child(3), .feed td:nth-child(3) { display: none; } }
 .recon { margin-top: 12px; }
-.types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-@media (max-width: 860px) { .types { grid-template-columns: 1fr; } }
+.types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 1100px) { .types { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .types { grid-template-columns: 1fr; } }
 .type h3 { font: 600 13px var(--sans); margin: 0 0 4px; display: flex; justify-content: space-between; }
 .type p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
 .type ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
@@ -58,6 +59,14 @@ button { font: 600 14px var(--sans); background: var(--accent); color: #1a1405; 
 button:hover { filter: brightness(1.08); }
 input[type=file] { display: none; }
 #msg { font-size: 13px; color: var(--muted); }
+.link { background: none; color: var(--muted); padding: 0; font-weight: 500; font-size: 13px; text-decoration: underline; }
+#login { position: fixed; inset: 0; background: rgba(8,9,12,.82); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+#login.on { display: flex; }
+#login form { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; width: min(420px, 100%); }
+#login h2 { margin-bottom: 6px; }
+#login p { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+#login input { width: 100%; font: 15px ui-monospace, Menlo, monospace; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+#login .err { color: var(--bad); min-height: 18px; }
 footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -68,13 +77,13 @@ footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
       <div class="kicker">Nordkai Marketplace</div>
       <h1>Leitstand</h1>
     </div>
-    <div class="live"><span class="dot" id="dot"></span><span id="updated">verbinde ...</span></div>
+    <div class="live"><span class="dot" id="dot"></span><span id="updated">verbinde ...</span><button class="link" id="logout" type="button">Schlüssel wechseln</button></div>
   </header>
 
   <div class="tiles">
     <div class="tile"><div class="label">Buchungen gesamt</div><div class="value" id="entries">0</div><div class="sub">Journal Einträge, unveränderlich</div></div>
-    <div class="tile"><div class="label">Bewegtes Geld heute</div><div class="value" id="moved">0,00 €</div><div class="sub">Summe aller Soll Buchungen (UTC Tag)</div></div>
-    <div class="tile"><div class="label">Summe aller Postings</div><div class="value" id="sum">0,00 €</div><div class="sub" id="balanced"></div></div>
+    <div class="tile"><div class="label">Bewegtes Geld heute</div><div class="value" id="moved">0,00 €</div><div class="sub">Summe aller Soll Buchungen in EUR (UTC Tag)</div></div>
+    <div class="tile"><div class="label">Summe je Währung</div><div class="value" id="sum">0,00 €</div><div class="sub" id="balanced"></div></div>
     <div class="tile"><div class="label">Outbox Rückstand</div><div class="value" id="lag">0</div><div class="sub" id="lagsub">noch nicht veröffentlicht</div></div>
     <div class="tile"><div class="label">Letzter Bankabgleich</div><div class="value" id="rec">keiner</div><div class="sub" id="recsub"></div></div>
   </div>
@@ -102,12 +111,28 @@ footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
       <div class="type"><h3>Fehlt im Ledger <span class="badge" id="c1">0</span></h3><p>Bankzeile ohne Buchung</p><ul id="l1"></ul></div>
       <div class="type"><h3>Fehlt bei der Bank <span class="badge" id="c2">0</span></h3><p>Buchung ohne Bankzeile</p><ul id="l2"></ul></div>
       <div class="type"><h3>Betrag weicht ab <span class="badge" id="c3">0</span></h3><p>Gleiche Referenz, anderer Betrag</p><ul id="l3"></ul></div>
+      <div class="type"><h3>Auszahlung abgeschlossen <span class="badge" id="c4">0</span></h3><p>Bank hat ausgezahlt, Geld aus Transit gebucht</p><ul id="l4"></ul></div>
     </div>
   </section>
   <footer>Alle Zahlen werden per SQL berechnet, Aktualisierung alle 2 Sekunden.</footer>
 </main>
+<div id="login" role="dialog" aria-modal="true" aria-labelledby="login-h">
+  <form id="login-form">
+    <h2 id="login-h">API Schlüssel</h2>
+    <p>Lesen: Rolle AUDITOR oder FINANCE. Kontoauszug hochladen: FINANCE. Lokal im Demo Profil: <span class="mono">demo-finance</span></p>
+    <input id="key" type="password" autocomplete="off" placeholder="X-Api-Key" required>
+    <div class="err" id="login-err"></div>
+    <button type="submit">Anmelden</button>
+  </form>
+</div>
 <script>
-const eur = c => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(c / 100);
+const money = (c, cur = 'EUR') => new Intl.NumberFormat('de-DE', { style: 'currency', currency: cur }).format(c / 100);
+const eur = c => money(c, 'EUR');
+// The key lives only in this tab (sessionStorage) and is sent as a header, never as a cookie.
+const store = { get: () => { try { return sessionStorage.getItem('ledger-key') || ''; } catch { return ''; } },
+                set: v => { try { v ? sessionStorage.setItem('ledger-key', v) : sessionStorage.removeItem('ledger-key'); } catch {} } };
+let apiKey = store.get();
+const api = (url, opts = {}) => fetch(url, { ...opts, headers: { ...(opts.headers || {}), 'X-Api-Key': apiKey } });
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const time = iso => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -122,7 +147,7 @@ function list(id, countId, items, render) {
 function render(d) {
   $('entries').textContent = d.entries.toLocaleString('de-DE');
   $('moved').textContent = eur(d.movedTodayCents);
-  $('sum').textContent = eur(d.postingsSumCents);
+  $('sum').textContent = Object.entries(d.postingsSumByCurrency).map(([c, v]) => money(v, c)).join(' · ');
   $('balanced').innerHTML = d.balanced
     ? '<span class="badge ok">ausgeglichen</span> Salden entsprechen den Postings'
     : '<span class="badge bad">Abweichung</span> ' + d.driftedAccounts + ' Konten driften';
@@ -136,22 +161,26 @@ function render(d) {
     $('recsub').innerHTML = 'gematcht ' + (issues ? '<span class="badge warn">' + issues + ' Auffälligkeiten</span>' : '<span class="badge ok">keine Auffälligkeiten</span>');
     list('l1', 'c1', r.missingInLedger, b => '<span>' + esc(b.counterparty) + '<br><span class="mono">' + esc(b.bookingDate) + ' ' + esc(b.reference) + '</span></span><span class="mono">' + eur(b.amountCents) + '</span>');
     list('l2', 'c2', r.missingAtBank, l => '<span>' + esc(l.description) + '<br><span class="mono">' + esc(l.reference) + '</span></span><span class="mono">' + eur(l.amountCents) + '</span>');
+    list('l4', 'c4', r.settledPayouts || [], ref => '<span class="mono">' + esc(ref) + '</span><span class="badge ok">abgeschlossen</span>');
+    $('c4').className = 'badge ok';
     list('l3', 'c3', r.amountMismatch, m => '<span>' + esc(m.reference) + '<br><span class="mono">Bank ' + eur(m.bankAmountCents) + '</span></span><span class="mono">Ledger ' + eur(m.ledgerAmountCents) + '</span>');
   }
 
   $('accounts').innerHTML = d.accounts.map(a =>
-    '<tr><td>' + esc(a.id) + '<br><span class="mono">' + esc(a.type) + '</span></td><td class="num">' + eur(a.normalBalance) + '</td></tr>').join('');
+    '<tr><td>' + esc(a.id) + '<br><span class="mono">' + esc(a.type) + '</span></td><td class="num">' + money(a.normalBalance, a.currency) + '</td></tr>').join('');
 
   $('feed').innerHTML = d.latestEntries.map(e =>
     '<tr class="' + (!first && !seen.has(e.id) ? 'new' : '') + '"><td class="mono">' + time(e.createdAt) + '</td><td class="desc">' + esc(e.description) +
-    '</td><td class="mono">' + esc(e.reference) + '</td><td class="num">' + eur(e.amount) + '</td></tr>').join('');
+    '</td><td class="mono">' + esc(e.reference) + '</td><td class="num">' + money(e.amount, e.currency) + '</td></tr>').join('');
   seen = new Set(d.latestEntries.map(e => e.id));
   first = false;
 }
 
 async function poll() {
   try {
-    const res = await fetch('/v1/dashboard', { cache: 'no-store' });
+    if (!apiKey) return askKey('');
+    const res = await api('/v1/dashboard', { cache: 'no-store' });
+    if (res.status === 401 || res.status === 403) return askKey(res.status === 401 ? 'Schlüssel unbekannt' : 'Dieser Schlüssel darf nicht lesen');
     if (!res.ok) throw new Error(res.status);
     render(await res.json());
     $('dot').className = 'dot';
@@ -161,8 +190,24 @@ async function poll() {
     $('updated').textContent = 'keine Verbindung';
   }
 }
+function askKey(err) {
+  $('login-err').textContent = err;
+  $('login').classList.add('on');
+  $('dot').className = 'dot off';
+  $('updated').textContent = 'nicht angemeldet';
+  $('key').focus();
+}
+$('login-form').onsubmit = e => {
+  e.preventDefault();
+  apiKey = $('key').value.trim();
+  store.set(apiKey);
+  $('key').value = '';
+  $('login').classList.remove('on');
+  poll();
+};
+$('logout').onclick = () => { apiKey = ''; store.set(''); askKey(''); };
 poll();
-setInterval(poll, 2000);
+setInterval(() => { if (!$('login').classList.contains('on')) poll(); }, 2000);
 
 $('upload').onclick = () => $('file').click();
 $('file').onchange = async () => {
@@ -170,9 +215,10 @@ $('file').onchange = async () => {
   if (!f) return;
   $('msg').textContent = 'gleiche ab ...';
   try {
-    const res = await fetch('/v1/reconciliations', { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: await f.text() });
+    const res = await api('/v1/reconciliations', { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: await f.text() });
     const body = await res.json();
-    $('msg').textContent = res.ok ? f.name + ': ' + body.matched + ' gematcht' : (body.detail || 'Fehler ' + res.status);
+    const settled = res.ok && body.settledPayouts.length ? ', ' + body.settledPayouts.length + ' Auszahlungen abgeschlossen' : '';
+    $('msg').textContent = res.ok ? f.name + ': ' + body.matched + ' gematcht' + settled : (body.detail || 'Fehler ' + res.status);
     poll();
   } catch (e) {
     $('msg').textContent = 'Upload fehlgeschlagen';

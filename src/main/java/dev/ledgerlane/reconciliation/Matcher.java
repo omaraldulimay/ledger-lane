@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Matches bank lines against ledger lines by reference and amount. Per reference, lines with equal amounts are
@@ -15,11 +16,19 @@ public final class Matcher {
     private Matcher() {
     }
 
+    /** The result plus the ids of the ledger entries that matched a bank line exactly. */
+    public record Outcome(ReconciliationResult result, List<UUID> matchedEntryIds) {
+    }
+
     public static ReconciliationResult match(List<BankLine> bank, List<LedgerLine> ledger) {
+        return matchWithIds(bank, ledger).result();
+    }
+
+    public static Outcome matchWithIds(List<BankLine> bank, List<LedgerLine> ledger) {
         List<BankLine> missingInLedger = new ArrayList<>();
         List<LedgerLine> missingAtBank = new ArrayList<>();
         List<ReconciliationResult.Mismatch> mismatches = new ArrayList<>();
-        int matched = 0;
+        List<UUID> matched = new ArrayList<>();
 
         Map<String, List<BankLine>> bankByRef = new LinkedHashMap<>();
         for (BankLine b : bank) {
@@ -43,7 +52,7 @@ public final class Matcher {
                 if (exact.isPresent()) {
                     ls.remove(exact.get());
                     it.remove();
-                    matched++;
+                    matched.add(exact.get().entryId());
                 }
             }
             while (!bs.isEmpty() && !ls.isEmpty()) {
@@ -57,6 +66,7 @@ public final class Matcher {
         for (var e : ledgerByRef.entrySet()) {
             missingAtBank.addAll(e.getValue());
         }
-        return new ReconciliationResult(matched, missingInLedger, missingAtBank, mismatches);
+        return new Outcome(new ReconciliationResult(matched.size(), missingInLedger, missingAtBank, mismatches, List.of()),
+                matched);
     }
 }
